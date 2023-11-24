@@ -1,14 +1,18 @@
 # SaveRep mod for Touhou Hisoutensoku
 
-This mod is to save replay when in one of the following situations:
+This mod is to save replay in one of the following situations:
 
-- the user is p1 or p2 in network battle, and:
+- the user is p1 or p2 in network or local battle, and:
     - p1 or p2 presses ESC to end the game, or
     - the game ends before one of the players wins because of desync, or
-    - the connection is lost
+    - the connection is lost, or
+    - the window is closed, or
+    - the game crashes
 - the user is spectating, and:
     - the user presses ESC to stop spectating, or
     - the connection is lost
+    - the window is closed, or
+    - the game crashes
 
 ## Build
 Requires CMake, git and the VisualStudio compiler (MSVC).
@@ -43,3 +47,10 @@ Now, to build the mod, go to the build directory (if you did the previous step y
 
 You should find the resulting SaveRep.dll mod inside the build folder that can be to SWRSToys.ini.
 In my case, I would add this line to it `SaveRep=C:/Users/PinkySmile/SokuProjects/SaveRep/build/SaveRep.dll`.
+
+## Thanks
+Thank [Tstar](https://github.com/Tstar00) for his test and helpful feedback, as well as suggestions.
+
+## Todo
+
+Make the mod configurable.
