@@ -43,6 +43,7 @@
 #include <mutex>
 #include <ostream>
 #include <processthreadsapi.h>
+#include <string>
 #include <thread>
 
 using namespace std::chrono_literals;
@@ -55,6 +56,7 @@ static LPTOP_LEVEL_EXCEPTION_FILTER ogExceptionFilter;
 static const auto spectatingSaveReplayIfAllow = (void(__thiscall *)(SokuLib::NetObject *))(0x454240);
 static const auto battleSaveReplay = (void (*)())(0x43ebe0);
 static const auto get00899840 = (char *(*)())(0x0043df40);
+static const auto isGamePaused = (*(bool (*)())0x43e740);
 // static const auto getReplayPath
 // 	= (void(__thiscall *)(SokuLib::InputManager *, char *replay_path, const char *profile1name, const char *profile2name))(0x42cb30);
 // static const auto writeReplay = (void(__thiscall *)(SokuLib::InputManager *, const char *path))(0x42b2d0);
@@ -138,6 +140,7 @@ template<typename T, int (T::**ogBattleOnProcess)()> static int /*SokuLib::Scene
 	int ret = (This->**ogBattleOnProcess)();
 	if (!hasUrgentlySaved) {
 		auto save = getCurrentSaveFunction();
+
 		if (save) {
 			if (isBeingClosed) {
 				std::cout << "Window is being closed. ";
@@ -148,45 +151,35 @@ template<typename T, int (T::**ogBattleOnProcess)()> static int /*SokuLib::Scene
 			} else if (ret == SokuLib::SCENE_TITLE && lastSceneInBattle != SokuLib::SCENE_BATTLE) {
 				std::cout << "Disconnect. ";
 				save();
+			} else if (ret == SokuLib::SCENE_SELECTCL || ret == SokuLib::SCENE_SELECTSV) {
+				SokuLib::NetObject *netobject = &SokuLib::getNetObject();
+				int unknown = (**(int(__fastcall **)(SokuLib::NetObject *))(*(unsigned int *)netobject + 0x30))(netobject);
+				bool paused = isGamePaused();
+				int battleStatus = ((int *)&SokuLib::getBattleMgr())[0x22];
+				if (!(unknown == 5 && paused && battleStatus == 7)) {
+					std::string reason;
+					if (unknown == 3 && !paused && battleStatus != 4)
+						reason = "your opponent pressed Esc or desync happened";
+					else if (unknown == 5 && !paused && battleStatus == 4)
+						reason = "your opponent pressed Esc"; // giuroll
+					else if (unknown == 5 && !paused && battleStatus != 7)
+						reason = "you pressed Esc";
+					else if (unknown == 3 && !paused && battleStatus == 4)
+						reason = "desync happened and the client of your opponent thought it won"; // giuroll
+					if (reason.empty()) {
+						std::cout << "Battle is stopped because of unknown reason";
+					} else
+						std::cout << "Battle is stopped probably because " + reason;
+					std::cout << " (" << unknown << ", ";
+					std::cout << paused << ", ";
+					std::cout << battleStatus << "). ";
+					save();
+				}
 			}
 		}
 	}
 	lastSceneInBattle = (SokuLib::Scene)ret;
 	return ret;
-}
-
-template<SokuLib::Scene retcode> static void __declspec(naked) gameEndTooEarly() {
-	static const SokuLib::Scene retcode_ = retcode; // workaround for the template parameter is unusable in inline asm (why?)
-	std::cout << "Esc or desync causes the game ends too early. ";
-	battleSaveReplay_();
-	__asm {
-		pop edi;
-		mov eax, retcode_;
-		pop esi;
-		ret;
-	}
-}
-
-static void __declspec(naked) gameEndTooEarly2() {
-	static auto gameEndTooEarlyAddr = gameEndTooEarly<SokuLib::SCENE_SELECTSV>;
-	static const void *fun004282d0 = (void *)0x004282d0;
-	__asm {
-		call fun004282d0;
-		jmp gameEndTooEarlyAddr;
-	}
-}
-static void __declspec(naked) gameEndTooEarly3() {
-	static const void *addr004283a2 = (void *)0x004283a2;
-	__asm {
-		push esi;
-	}
-	std::cout << "Esc or desync causes the game ends too early. ";
-	battleSaveReplay_();
-	__asm {
-		pop esi;
-		cmp [esi+0x6c8], 0;
-		jmp addr004283a2;
-	}
 }
 
 static LRESULT __stdcall hookedWndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -341,12 +334,6 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	ogBattleClientOnProcess = SokuLib::TamperDword(&SokuLib::VTable_BattleClient.onProcess, CBattles_OnProcess<SokuLib::BattleClient, &ogBattleClientOnProcess>);
 	ogTitleOnProcess = SokuLib::TamperDword(&SokuLib::VTable_Title.onProcess, myTitleOnProcess);
 	VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, old, &old);
-	VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &old);
-	SokuLib::TamperNearJmp(0x428663, gameEndTooEarly<SokuLib::SCENE_SELECTCL>);
-	SokuLib::TamperNearJmp(0x428680, gameEndTooEarly<SokuLib::SCENE_SELECTCL>);
-	SokuLib::TamperNearJmp(0x4283b0, gameEndTooEarly<SokuLib::SCENE_SELECTSV>);
-	SokuLib::TamperNearJmp(0x42838e, gameEndTooEarly2);
-	VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, old, &old);
 	FlushInstructionCache(GetCurrentProcess(), nullptr, 0);
 	return true;
 }
