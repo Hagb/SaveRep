@@ -51,6 +51,8 @@ static int /*SokuLib::Scene*/ (SokuLib::Battle::*ogBattleOnProcess)();
 static int /*SokuLib::Scene*/ (SokuLib::BattleWatch::*ogBattleWatchOnProcess)();
 static int /*SokuLib::Scene*/ (SokuLib::BattleClient::*ogBattleClientOnProcess)();
 static int /*SokuLib::Scene*/ (SokuLib::BattleServer::*ogBattleServerOnProcess)();
+static int /*SokuLib::Scene*/ (SokuLib::SelectClient::*ogSelectClientOnProcess)();
+static int /*SokuLib::Scene*/ (SokuLib::SelectServer::*ogSelectServerOnProcess)();
 static int /*SokuLib::Scene*/ (SokuLib::Title::*ogTitleOnProcess)();
 static LPTOP_LEVEL_EXCEPTION_FILTER ogExceptionFilter;
 static const auto spectatingSaveReplayIfAllow = (void(__thiscall *)(SokuLib::NetObject *))(0x454240);
@@ -125,19 +127,7 @@ static void (*getCurrentSaveFunction())() {
 	}
 }
 
-template<typename T, int (T::**ogBattleOnProcess)()> static int /*SokuLib::Scene*/ __fastcall CBattles_OnProcess(T *This) {
-#ifdef CRASH_TEST
-	if (lastKey == 'k')
-		crash();
-	if (lastKey == 't')
-		Sleep(500);
-#endif
-	std::unique_lock<std::timed_mutex> saveLock_(saveLock);
-#ifdef CRASH_TEST
-	if (lastKey == 't')
-		Sleep(500000);
-#endif
-	int ret = (This->**ogBattleOnProcess)();
+void SaveRepIfNeeded(SokuLib::Scene newSceneId_) {
 	if (!hasUrgentlySaved) {
 		auto save = getCurrentSaveFunction();
 
@@ -148,15 +138,15 @@ template<typename T, int (T::**ogBattleOnProcess)()> static int /*SokuLib::Scene
 				hasUrgentlySaved = true;
 				std::unique_lock<std::mutex> saveFinishMtx_(urgentlySaveFinishMtx);
 				urgentlySaveFinishCV.notify_all();
-			} else if (ret == SokuLib::SCENE_TITLE && lastSceneInBattle != SokuLib::SCENE_BATTLE) {
+			} else if (newSceneId_ == SokuLib::SCENE_TITLE && lastSceneInBattle != SokuLib::SCENE_BATTLE) {
 				std::cout << "Disconnect. ";
 				save();
-			} else if (ret == SokuLib::SCENE_SELECTCL || ret == SokuLib::SCENE_SELECTSV) {
+			} else if (newSceneId_ == SokuLib::SCENE_SELECTCL || newSceneId_ == SokuLib::SCENE_SELECTSV) {
 				SokuLib::NetObject *netobject = &SokuLib::getNetObject();
 				int unknown = (**(int(__fastcall **)(SokuLib::NetObject *))(*(unsigned int *)netobject + 0x30))(netobject);
 				bool paused = isGamePaused();
 				int battleStatus = ((int *)&SokuLib::getBattleMgr())[0x22];
-				if (!(unknown == 5 && paused && battleStatus == 7)) {
+				if (!((unknown == 5 || unknown == 3) && paused && battleStatus == 7)) { // unknown == 3, paused == 1, battleStatus == 7 : giuroll
 					std::string reason;
 					if (unknown == 3 && !paused && battleStatus != 4)
 						reason = "your opponent pressed Esc or desync happened";
@@ -175,11 +165,42 @@ template<typename T, int (T::**ogBattleOnProcess)()> static int /*SokuLib::Scene
 					std::cout << battleStatus << "). ";
 					save();
 				}
+#ifdef _DEBUG
+				else {
+					std::cout << "Battle ends with (" << unknown << ", ";
+					std::cout << paused << ", ";
+					std::cout << battleStatus << "). " << std::endl;
+				}
+#endif
 			}
 		}
 	}
-	lastSceneInBattle = (SokuLib::Scene)ret;
+	lastSceneInBattle = (SokuLib::Scene)newSceneId_;
+}
+
+template<typename T, int (T::**ogBattleOnProcess)()> static int /*SokuLib::Scene*/ __fastcall CBattles_OnProcess(T *This) {
+#ifdef CRASH_TEST
+	if (lastKey == 'k')
+		crash();
+	if (lastKey == 't')
+		Sleep(500);
+#endif
+	std::unique_lock<std::timed_mutex> saveLock_(saveLock);
+#ifdef CRASH_TEST
+	if (lastKey == 't')
+		Sleep(500000);
+#endif
+	int ret = (This->**ogBattleOnProcess)();
+	SaveRepIfNeeded((SokuLib::Scene)ret);
 	return ret;
+}
+
+template<typename T, int (T::**ogSelectOnProcess)()> static int /*SokuLib::Scene*/ __fastcall CSelects_OnProcess(T *This) {
+	{
+		std::unique_lock<std::timed_mutex> saveLock_(saveLock);
+		SaveRepIfNeeded(SokuLib::newSceneId);
+	}
+	return (This->**ogSelectOnProcess)();
 }
 
 static LRESULT __stdcall hookedWndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -332,6 +353,8 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	ogBattleWatchOnProcess = SokuLib::TamperDword(&SokuLib::VTable_BattleWatch.onProcess, CBattles_OnProcess<SokuLib::BattleWatch, &ogBattleWatchOnProcess>);
 	ogBattleServerOnProcess = SokuLib::TamperDword(&SokuLib::VTable_BattleServer.onProcess, CBattles_OnProcess<SokuLib::BattleServer, &ogBattleServerOnProcess>);
 	ogBattleClientOnProcess = SokuLib::TamperDword(&SokuLib::VTable_BattleClient.onProcess, CBattles_OnProcess<SokuLib::BattleClient, &ogBattleClientOnProcess>);
+	ogSelectServerOnProcess = SokuLib::TamperDword(&SokuLib::VTable_SelectServer.onProcess, CSelects_OnProcess<SokuLib::SelectServer, &ogSelectServerOnProcess>);
+	ogSelectClientOnProcess = SokuLib::TamperDword(&SokuLib::VTable_SelectClient.onProcess, CSelects_OnProcess<SokuLib::SelectClient, &ogSelectClientOnProcess>);
 	ogTitleOnProcess = SokuLib::TamperDword(&SokuLib::VTable_Title.onProcess, myTitleOnProcess);
 	VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, old, &old);
 	FlushInstructionCache(GetCurrentProcess(), nullptr, 0);
