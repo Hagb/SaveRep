@@ -1,0 +1,33 @@
+#pragma code_page(65001)
+#include <windows.h>
+#include "resource.h"
+
+LANGUAGE LANG_ENGLISH, SUBLANG_NEUTRAL
+STRINGTABLE
+BEGIN
+    IDS_CRASH_REPLAY_SAVE_GRACEFULLY "The game has crashed! Replay has been saved urgently and gracefully."
+    IDS_Replay_has_been_saved "Replay has been saved"
+    IDS_CRASH_REPLAY_SAVE_FORCELY "The game has crashed! Replay has been saved urgently and forcely."
+    IDS_Cannot_save_replay "Cannot save replay"
+    IDS_CRASH_REPLAY_SAVE_FAILED "The game has crashed! But it was failed to save replay urgently."
+END
+
+LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
+STRINGTABLE
+BEGIN
+    IDS_CRASH_REPLAY_SAVE_GRACEFULLY "游戏崩溃！已紧急保存 rep。"
+    IDS_Replay_has_been_saved "已保存 rep"
+    IDS_CRASH_REPLAY_SAVE_FORCELY "游戏崩溃！已紧急强制保存 rep。"
+    IDS_Cannot_save_replay "无法保存 rep"
+    IDS_CRASH_REPLAY_SAVE_FAILED "游戏崩溃！但紧急保存 rep 失败。"
+END
+
+LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_TRADITIONAL
+STRINGTABLE
+BEGIN
+    IDS_CRASH_REPLAY_SAVE_GRACEFULLY "遊戲崩潰！已緊急儲存 rep。"
+    IDS_Replay_has_been_saved "已儲存 rep"
+    IDS_CRASH_REPLAY_SAVE_FORCELY "遊戲崩潰！已緊急強制儲存 rep。"
+    IDS_Cannot_save_replay "無法儲存 rep"
+    IDS_CRASH_REPLAY_SAVE_FAILED "遊戲崩潰！但緊急儲存 rep 失敗。"
+END

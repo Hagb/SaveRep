@@ -33,6 +33,7 @@
 #include "Tamper.hpp"
 #include "TextureManager.hpp"
 #include "VTables.hpp"
+#include "resource.h"
 #include <WinUser.h>
 #include <condition_variable>
 #include <cstddef>
@@ -266,8 +267,15 @@ static void saveInCrash() {
 		isBeingClosed = true;
 		std::unique_lock<std::mutex> saveFinishMtx_(urgentlySaveFinishMtx);
 		if (urgentlySaveFinishCV.wait_for(saveFinishMtx_, 2000ms, [] { return hasUrgentlySaved; })) {
-			std::cout << "Replay has been saved urgently and gracefully" << std::endl;
-			MessageBoxA(NULL, "Replay has been saved urgently and gracefully", "Replay has been saved", 0);
+			std::cout << "Replay has been saved urgently and gracefully." << std::endl;
+			const wchar_t *text, *title;
+			size_t text_len = LoadStringW(hModule, IDS_CRASH_REPLAY_SAVE_GRACEFULLY, (wchar_t *)&text, 0);
+			size_t title_len = LoadStringW(hModule, IDS_Replay_has_been_saved, (wchar_t *)&title, 0);
+			text = (wchar_t *)memcpy(calloc(text_len + 1, sizeof(wchar_t)), text, sizeof(wchar_t) * text_len);
+			title = (wchar_t *)memcpy(calloc(title_len + 1, sizeof(wchar_t)), title, sizeof(wchar_t) * title_len);
+			MessageBoxW(NULL, text, title, 0);
+			free((void *)text);
+			free((void *)title);
 			return;
 		} else
 			std::cout << "Cannot not save replay gracefully (timeout)!" << std::endl;
@@ -283,15 +291,29 @@ static void saveInCrash() {
 			auto save = getCurrentSaveFunction();
 			if (save) {
 				save();
-				std::cout << "Replay has been saved urgently and forcely" << std::endl;
-				MessageBoxA(NULL, "Replay has been saved urgently and forcely", "Replay has been saved", 0);
+				std::cout << "Replay has been saved urgently and forcely." << std::endl;
+				const wchar_t *text, *title;
+				size_t text_len = LoadStringW(hModule, IDS_CRASH_REPLAY_SAVE_FORCELY, (wchar_t *)&text, 0);
+				size_t title_len = LoadStringW(hModule, IDS_Replay_has_been_saved, (wchar_t *)&title, 0);
+				text = (wchar_t *)memcpy(calloc(text_len + 1, sizeof(wchar_t)), text, sizeof(wchar_t) * text_len);
+				title = (wchar_t *)memcpy(calloc(title_len + 1, sizeof(wchar_t)), title, sizeof(wchar_t) * title_len);
+				MessageBoxW(NULL, text, title, 0);
+				free((void *)text);
+				free((void *)title);
 				return;
 			} else
 				std::cout << "Unexpected status: scene=" << (int)lastSceneInBattle << ". Give up." << std::endl;
 		} __except (EXCEPTION_EXECUTE_HANDLER) {
 			std::cout << "Exception when saving replay forcely." << std::endl;
 		}
-		MessageBoxA(NULL, "Failed to save replay urgently", "Cannot save replay", MB_ICONERROR);
+		const wchar_t *text, *title;
+		size_t text_len = LoadStringW(hModule, IDS_CRASH_REPLAY_SAVE_FAILED, (wchar_t *)&text, 0);
+		size_t title_len = LoadStringW(hModule, IDS_Cannot_save_replay, (wchar_t *)&title, 0);
+		text = (wchar_t *)memcpy(calloc(text_len + 1, sizeof(wchar_t)), text, sizeof(wchar_t) * text_len);
+		title = (wchar_t *)memcpy(calloc(title_len + 1, sizeof(wchar_t)), title, sizeof(wchar_t) * title_len);
+		MessageBoxW(NULL, text, title, MB_ICONERROR);
+		free((void *)text);
+		free((void *)title);
 	});
 	thread_.join();
 }
