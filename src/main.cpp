@@ -85,7 +85,7 @@ void crash() {
 }
 #endif
 
-static void spectatingSaveReplay_() {
+static void SpectatingSaveReplay_() {
 	std::cout << "Save replay." << std::endl;
 	auto old_option = get00899840()[0x73];
 	// switch (get00899840()[0x73]) {
@@ -100,16 +100,16 @@ static void spectatingSaveReplay_() {
 	get00899840()[0x73] = old_option;
 }
 
-static void battleSaveReplay_() {
+static void BattleSaveReplay_() {
 	std::cout << "Save replay." << std::endl;
 	battleSaveReplay();
 }
 
-static void (*getCurrentSaveFunction())() {
+static void (*GetCurrentSaveFunction())() {
 	switch (lastSceneInBattle) {
 	case SokuLib::Scene::SCENE_BATTLECL:
 	case SokuLib::Scene::SCENE_BATTLESV:
-		return battleSaveReplay_;
+		return BattleSaveReplay_;
 	case SokuLib::Scene::SCENE_BATTLE:
 		if (SokuLib::subMode != SokuLib::BATTLE_SUBMODE_PLAYING2)
 			return nullptr;
@@ -118,12 +118,12 @@ static void (*getCurrentSaveFunction())() {
 		case SokuLib::BATTLE_MODE_VSCOM:
 		case SokuLib::BATTLE_MODE_VSPLAYER:
 		case SokuLib::BATTLE_MODE_TIME_TRIAL:
-			return battleSaveReplay_;
+			return BattleSaveReplay_;
 		default:
 			return nullptr;
 		}
 	case SokuLib::Scene::SCENE_BATTLEWATCH:
-		return spectatingSaveReplay_;
+		return SpectatingSaveReplay_;
 	default:
 		return nullptr;
 	}
@@ -131,7 +131,7 @@ static void (*getCurrentSaveFunction())() {
 
 void SaveRepIfNeeded(SokuLib::Scene newSceneId_) {
 	if (!hasUrgentlySaved) {
-		auto save = getCurrentSaveFunction();
+		auto save = GetCurrentSaveFunction();
 
 		if (save) {
 			if (isBeingClosed) {
@@ -225,7 +225,7 @@ static LRESULT __stdcall hookedWndProc(const HWND hWnd, UINT uMsg, WPARAM wParam
 	if (isBeingClosed || !(uMsg == WM_DESTROY || uMsg == WM_CLOSE))
 		return CallWindowProc(ogWndProc, hWnd, uMsg, wParam, lParam);
 	{
-		if (getCurrentSaveFunction()) {
+		if (GetCurrentSaveFunction()) {
 			std::cout << "Window is being closed. Try to urgently save rep." << std::endl;
 			isBeingClosed = true;
 			std::unique_lock<std::mutex> saveFinishMtx_(urgentlySaveFinishMtx);
@@ -249,11 +249,11 @@ private:
 	_Lock &_lock;
 };
 
-static void saveInCrash() {
+static void SaveInCrash() {
 	if (crashThreadId == 0 || isCrashedHandled)
 		return;
 	isCrashedHandled = true;
-	if (!getCurrentSaveFunction())
+	if (!GetCurrentSaveFunction())
 		return;
 
 	FILE *_;
@@ -291,7 +291,7 @@ static void saveInCrash() {
 		std::cout << "Failed to gain lock (timeout). Ignore it." << std::endl;
 	std::thread thread_([] {
 		__try {
-			auto save = getCurrentSaveFunction();
+			auto save = GetCurrentSaveFunction();
 			if (save) {
 				save();
 				std::cout << "Replay has been saved urgently and forcely." << std::endl;
@@ -326,7 +326,7 @@ static LONG WINAPI exceptionFilter(PEXCEPTION_POINTERS ExPtr) {
 	std::unique_lock<std::mutex> crashLock_(crashLock);
 	if (!crashThreadId) {
 		crashThreadId = GetCurrentThreadId();
-		saveInCrash();
+		SaveInCrash();
 	}
 	crashLock_.unlock();
 	if (ogExceptionFilter) {
