@@ -48,6 +48,7 @@
 #include <thread>
 
 using namespace std::chrono_literals;
+HINSTANCE hModule;
 static int /*SokuLib::Scene*/ (SokuLib::Battle::*ogBattleOnProcess)();
 static int /*SokuLib::Scene*/ (SokuLib::BattleWatch::*ogBattleWatchOnProcess)();
 static int /*SokuLib::Scene*/ (SokuLib::BattleClient::*ogBattleClientOnProcess)();
@@ -383,11 +384,14 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	ogSelectClientOnProcess = SokuLib::TamperDword(&SokuLib::VTable_SelectClient.onProcess, CSelects_OnProcess<SokuLib::SelectClient, &ogSelectClientOnProcess>);
 	ogTitleOnProcess = SokuLib::TamperDword(&SokuLib::VTable_Title.onProcess, myTitleOnProcess);
 	VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, old, &old);
-	FlushInstructionCache(GetCurrentProcess(), nullptr, 0);
+	ogExceptionFilter = SetUnhandledExceptionFilter(exceptionFilter);
+	// FlushInstructionCache(GetCurrentProcess(), nullptr, 0);
 	return true;
 }
 
-extern "C" int APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) {
+extern "C" int APIENTRY DllMain(HMODULE hModule_, DWORD fdwReason, LPVOID lpReserved) {
+	if (fdwReason == DLL_PROCESS_ATTACH)
+		hModule = hModule_;
 	return TRUE;
 }
 
