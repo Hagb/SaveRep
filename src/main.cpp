@@ -258,8 +258,10 @@ static void saveInCrash() {
 	FILE *_;
 
 	AllocConsole();
+	std::cout.flush();
 	freopen_s(&_, "CONOUT$", "w", stdout);
 	freopen_s(&_, "CONOUT$", "w", stderr);
+	std::cout.clear();
 
 	std::cout << "The game has crashed! Try to save replay." << std::endl;
 	if (GetThreadId(*(HANDLE *)(0x89ff90 + 0x50)) != crashThreadId) {
@@ -366,8 +368,10 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	FILE *_;
 
 	AllocConsole();
+	std::cout.flush();
 	freopen_s(&_, "CONOUT$", "w", stdout);
 	freopen_s(&_, "CONOUT$", "w", stderr);
+	std::cout.clear();
 #endif
 	DWORD old;
 	VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &old);
