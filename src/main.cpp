@@ -384,8 +384,7 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	ogSelectClientOnProcess = SokuLib::TamperDword(&SokuLib::VTable_SelectClient.onProcess, CSelects_OnProcess<SokuLib::SelectClient, &ogSelectClientOnProcess>);
 	ogTitleOnProcess = SokuLib::TamperDword(&SokuLib::VTable_Title.onProcess, myTitleOnProcess);
 	VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, old, &old);
-	ogExceptionFilter = SetUnhandledExceptionFilter(exceptionFilter);
-	// FlushInstructionCache(GetCurrentProcess(), nullptr, 0);
+	FlushInstructionCache(GetCurrentProcess(), nullptr, 0);
 	return true;
 }
 
