@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Junyu Guo (Hagb)
+// Copyright (c) 2024 Junyu Guo (Hagb)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,6 +35,7 @@
 #include "VTables.hpp"
 #include "resource.h"
 #include <WinUser.h>
+#include <atomic>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -66,13 +67,12 @@ static const auto isGamePaused = (*(bool (*)())0x43e740);
 // static const auto writeReplay = (void(__thiscall *)(SokuLib::InputManager *, const char *path))(0x42b2d0);
 static WNDPROC ogWndProc;
 static bool isBeingClosed = false;
-static DWORD crashThreadId = 0;
-static bool isCrashedHandled = false;
+static unsigned int crashCount = 0;
 static bool hasUrgentlySaved = false;
 static std::mutex urgentlySaveFinishMtx;
 static std::condition_variable urgentlySaveFinishCV;
 static std::timed_mutex saveLock;
-static std::mutex crashLock;
+static std::timed_mutex crashLock;
 static SokuLib::Scene lastSceneInBattle = SokuLib::SCENE_TITLE;
 // #define CRASH_TEST
 #ifdef CRASH_TEST
@@ -249,10 +249,7 @@ private:
 	_Lock &_lock;
 };
 
-static void SaveInCrash() {
-	if (crashThreadId == 0 || isCrashedHandled)
-		return;
-	isCrashedHandled = true;
+static void SaveInCrash(DWORD crashedThreadId) {
 	if (!GetCurrentSaveFunction())
 		return;
 
@@ -265,8 +262,8 @@ static void SaveInCrash() {
 	std::cout.clear();
 
 	std::cout << "The game has crashed! Try to save replay." << std::endl;
-	if (GetThreadId(*(HANDLE *)(0x89ff90 + 0x50)) != crashThreadId) {
-		std::cout << "Try to urgently (and gracefully) save replay." << std::endl;
+	if (GetThreadId(*(HANDLE *)(0x89ff90 + 0x50)) != crashedThreadId) {
+		std::cout << "The game loop thread seems still alive. Try to urgently (and gracefully) save replay." << std::endl;
 		isBeingClosed = true;
 		std::unique_lock<std::mutex> saveFinishMtx_(urgentlySaveFinishMtx);
 		if (urgentlySaveFinishCV.wait_for(saveFinishMtx_, 2000ms, [] { return hasUrgentlySaved; })) {
@@ -283,7 +280,7 @@ static void SaveInCrash() {
 		} else
 			std::cout << "Cannot not save replay gracefully (timeout)!" << std::endl;
 	} else
-		std::cout << "The thread saving replay in original game has crashed!" << std::endl;
+		std::cout << "The game loop thread has crashed!" << std::endl;
 
 	std::cout << "Try to save replay forcely." << std::endl;
 	std::unique_lock<std::timed_mutex> saveLock_(saveLock, std::defer_lock);
@@ -307,7 +304,7 @@ static void SaveInCrash() {
 			} else
 				std::cout << "Unexpected status: scene=" << (int)lastSceneInBattle << ". Give up." << std::endl;
 		} __except (EXCEPTION_EXECUTE_HANDLER) {
-			std::cout << "Exception when saving replay forcely." << std::endl;
+			std::cout << "The thread threw an exception when saving replay forcely." << std::endl;
 		}
 		const wchar_t *text, *title;
 		size_t text_len = LoadStringW(hModule, IDS_CRASH_REPLAY_SAVE_FAILED, (wchar_t *)&text, 0);
@@ -322,16 +319,31 @@ static void SaveInCrash() {
 }
 
 static LONG WINAPI exceptionFilter(PEXCEPTION_POINTERS ExPtr) {
-	std::cout << "SaveRep exception filter is triggered." << std::endl;
-	std::unique_lock<std::mutex> crashLock_(crashLock);
-	if (!crashThreadId) {
-		crashThreadId = GetCurrentThreadId();
-		SaveInCrash();
+	std::string threadInfo = "Thread " + std::to_string(GetCurrentThreadId()) + ": ";
+	std::cout << threadInfo << "SaveRep exception filter is triggered." << std::endl;
+	std::unique_lock<std::timed_mutex> crashLock_(crashLock, std::defer_lock);
+	while (!crashLock_.try_lock_for(1s)) {
+		std::cout << threadInfo << "Waiting for the older crash handler..." << std::endl;
 	}
+	if (crashCount++ == 0) {
+		std::cout << threadInfo << "Try to save replay." << std::endl;
+		DWORD crashedThreadId = GetCurrentThreadId();
+		std::thread thread([crashedThreadId] {
+			__try {
+				SaveInCrash(crashedThreadId);
+			} __except (EXCEPTION_EXECUTE_HANDLER) {
+				std::cout << "The thread to save replay threw an exception." << std::endl;
+			}
+		});
+		thread.join();
+	} else
+		std::cout << threadInfo << "Crash " << crashCount << " .No need to save rep, since we have tried to save it." << std::endl;
 	crashLock_.unlock();
 	if (ogExceptionFilter) {
-		std::cout << "Call original exception filter." << std::endl;
-		return ogExceptionFilter(ExPtr);
+		std::cout << threadInfo << "Call original exception filter." << std::endl;
+		LONG ret = ogExceptionFilter(ExPtr);
+		std::cout << threadInfo << "original exception filter finished." << std::endl;
+		return ret;
 	}
 	return EXCEPTION_EXECUTE_HANDLER;
 }
@@ -343,7 +355,7 @@ static int /*SokuLib::Scene*/ __fastcall myTitleOnProcess(SokuLib::Title *This) 
 		if (hasSetFilter)
 			return ret;
 		// when this function is called second time
-		std::unique_lock<std::mutex> crashLock_(crashLock);
+		std::unique_lock<std::timed_mutex> crashLock_(crashLock);
 		ogExceptionFilter = SetUnhandledExceptionFilter(exceptionFilter);
 		hasSetFilter = true;
 		return ret;
